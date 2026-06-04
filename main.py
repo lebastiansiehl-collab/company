@@ -52,7 +52,7 @@ if st.button("Daten anzeigen"):
 # Ganz oben in main.py
 from git_sync import sync_db 
 
-submit = st.form_submit_button("Speichern")
+    submit = st.form_submit_button("Speichern")
     
 if submit:
     conn = sqlite3.connect(DB_PATH)
