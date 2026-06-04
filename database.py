@@ -2,8 +2,8 @@ from sqlalchemy import create_engine, Column, Integer, String, Date
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Datenbank-Pfad (liegt im Ordner /data)
-engine = create_engine('sqlite:///data/arbeitsmedizin.db')
+# Verbindung zur SQLite-Datenbank im /data Ordner
+engine = create_engine('sqlite:///data/arbeitsmedizin.db', connect_args={"check_same_thread": False})
 Base = declarative_base()
 SessionLocal = sessionmaker(bind=engine)
 
