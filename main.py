@@ -1,30 +1,27 @@
 import streamlit as st
-import gspread
+import sqlite3
 import pandas as pd
+from github import Github
+import base64
 
-# Dein Google Sheet Link
-SHEET_URL = "HIER_DEINEN_LINK_ZUM_GOOGLE_SHEET_EINTRAGEN"
+# Verbindung zu GitHub
+g = Github(st.secrets["GIT_TOKEN"])
+repo = g.get_repo("lebastiansiehl-collab/company")
 
-st.title("Arbeitsmedizin Portal")
-
-# Verbindung
-conn = st.connection("gsheets", type="gsheets")
-# Wenn du das erste Mal "st.connection" nutzt, fragt er nach der Installation:
-# pip install streamlit-gsheets
-
-# Daten laden
-df = conn.read(spreadsheet=SHEET_URL)
-st.write(df)
-
-# Daten speichern
-with st.form("einsatz_form"):
-    betrieb_id = st.number_input("Betriebs-ID", min_value=1)
-    stunden = st.number_input("Stunden", min_value=1)
-    submit = st.form_submit_button("Speichern")
+def save_to_github(db_path):
+    with open(db_path, "rb") as f:
+        content = f.read()
     
-    if submit:
-        # Neue Zeile
-        neue_zeile = pd.DataFrame([{"betrieb_id": betrieb_id, "stunden": stunden, "status": "Offen"}])
-        updated_df = pd.concat([df, neue_zeile], ignore_index=True)
-        conn.update(spreadsheet=SHEET_URL, data=updated_df)
-        st.success("Gespeichert!")
+    # Datei auf GitHub aktualisieren
+    try:
+        contents = repo.get_contents("data/arbeitsmedizin.db")
+        repo.update_file(contents.path, "Update DB via App", content, contents.sha)
+    except:
+        repo.create_file("data/arbeitsmedizin.db", "Init DB", content)
+
+# Wenn gespeichert wird:
+if submit:
+    # 1. Lokal in die DB (damit die App sofort aktualisiert)
+    # 2. Synchronisation zu GitHub
+    save_to_github('data/arbeitsmedizin.db')
+    st.success("Daten sicher in GitHub gespeichert!")
