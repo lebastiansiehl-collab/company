@@ -52,19 +52,18 @@ if st.button("Daten anzeigen"):
 # Ganz oben in main.py
 from git_sync import sync_db 
 
-# ... (Dein Speicher-Block)
-    if submit:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("INSERT INTO einsaetze (betrieb_id, stunden, status) VALUES (?, ?, ?)", 
-                  (betrieb_id, stunden, 'Offen'))
-        conn.commit()
-        conn.close()
-        
-        # JETZT: Synchronisation mit GitHub auslösen
-        sync_db() 
-        
-        st.success("Erfolgreich in GitHub gespeichert!")
+submit = st.form_submit_button("Speichern")
+    
+if submit:
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("INSERT INTO einsaetze (betrieb_id, stunden, status) VALUES (?, ?, ?)", 
+              (betrieb_id, stunden, 'Offen'))
+    conn.commit()
+    conn.close()
+    
+    sync_db() 
+    st.success("Einsatz gespeichert und synchronisiert!")
 import streamlit as st
 
 if "GIT_TOKEN" in st.secrets:
