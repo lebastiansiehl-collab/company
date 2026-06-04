@@ -1,6 +1,11 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
+import os
+import streamlit as st
+
+st.write("Aktueller Arbeitsordner:", os.getcwd())
+st.write("Existiert die Datenbankdatei?", os.path.exists('data/arbeitsmedizin.db'))
 
 st.title("Arbeitsmedizin Portal")
 
