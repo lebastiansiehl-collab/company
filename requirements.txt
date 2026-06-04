@@ -1,4 +1,4 @@
 streamlit
-sqlalchemy
+gspread
+oauth2client
 pandas
-GitPython
