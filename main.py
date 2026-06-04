@@ -49,3 +49,19 @@ if st.button("Daten anzeigen"):
     df = pd.read_sql_query("SELECT * FROM einsaetze", conn)
     st.write(df)
     conn.close()
+# Ganz oben in main.py
+from git_sync import sync_db 
+
+# ... (Dein Speicher-Block)
+    if submit:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("INSERT INTO einsaetze (betrieb_id, stunden, status) VALUES (?, ?, ?)", 
+                  (betrieb_id, stunden, 'Offen'))
+        conn.commit()
+        conn.close()
+        
+        # JETZT: Synchronisation mit GitHub auslösen
+        sync_db() 
+        
+        st.success("Erfolgreich in GitHub gespeichert!")
