@@ -34,7 +34,7 @@ with st.form("einsatz_form"):
     stunden = st.number_input("Stunden", min_value=1)
     submit = st.form_submit_button("Speichern")
     
-    if submit:
+if submit:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("INSERT INTO einsaetze (betrieb_id, stunden, status) VALUES (?, ?, ?)", 
@@ -67,7 +67,6 @@ from git_sync import sync_db
         st.success("Erfolgreich in GitHub gespeichert!")
 import streamlit as st
 
-# Test, ob das Token geladen wird
 if "GIT_TOKEN" in st.secrets:
     st.write("✅ Token gefunden, wir können speichern!")
 else:
