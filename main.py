@@ -65,3 +65,10 @@ from git_sync import sync_db
         sync_db() 
         
         st.success("Erfolgreich in GitHub gespeichert!")
+import streamlit as st
+
+# Test, ob das Token geladen wird
+if "GIT_TOKEN" in st.secrets:
+    st.write("✅ Token gefunden, wir können speichern!")
+else:
+    st.error("❌ Token nicht gefunden! Bitte in Streamlit 'Secrets' eintragen.")
