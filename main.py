@@ -3,57 +3,78 @@ import sqlite3
 import pandas as pd
 from github import Github
 import os
+from datetime import date
 
 # Konfiguration
 g = Github(st.secrets["GIT_TOKEN"])
 repo = g.get_repo("lebastiansiehl-collab/company")
 DB_PATH = "data/arbeitsmedizin.db"
 
-# Datenbank-Lade-Logik
 def load_db():
     if not os.path.exists("data"): os.makedirs("data")
     contents = repo.get_contents(DB_PATH)
     with open(DB_PATH, "wb") as f:
         f.write(contents.decoded_content)
 
-# Speichern-Logik
 def save_db():
     with open(DB_PATH, "rb") as f:
         content = f.read()
     contents = repo.get_contents(DB_PATH)
     repo.update_file(contents.path, "Update DB via App", content, contents.sha)
 
-# Initialisierung
 if "db_loaded" not in st.session_state:
     load_db()
     st.session_state.db_loaded = True
 
-st.title("Arbeitsmedizin Portal")
+st.title("Arbeitsmedizin Portal Pro")
 
-# 1. Formular
+# Formular
 with st.form("einsatz_form"):
-    betrieb_id = st.number_input("Betriebs-ID", min_value=1)
-    stunden = st.number_input("Stunden", min_value=1)
+    col1, col2 = st.columns(2)
+    betrieb_id = col1.number_input("Betriebs-ID", min_value=1)
+    soll_stunden = col1.number_input("Soll-Stunden (jährlich)", min_value=0)
+    ist_stunden = col2.number_input("Ist-Stunden (jetzt)", min_value=0)
     submit = st.form_submit_button("Speichern")
     
     if submit:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute("INSERT INTO einsaetze (betrieb_id, stunden, status) VALUES (?, ?, ?)", 
-                  (betrieb_id, stunden, 'Offen'))
+        c.execute("INSERT INTO einsaetze (betrieb_id, soll_stunden, ist_stunden, datum) VALUES (?, ?, ?, ?)", 
+                  (betrieb_id, soll_stunden, ist_stunden, str(date.today())))
         conn.commit()
         conn.close()
         save_db()
-        st.success("Erfolgreich gespeichert!")
+        st.success("Gespeichert!")
 
-# 2. Daten-Übersicht (Tabelle)
-st.subheader("Aktuelle Einsätze")
+# Aggregierte Übersicht mit Farblogik
+st.subheader("Betriebs-Übersicht")
 conn = sqlite3.connect(DB_PATH)
 df = pd.read_sql_query("SELECT * FROM einsaetze", conn)
 conn.close()
 
-st.dataframe(df)
+if not df.empty:
+    summary = df.groupby('betrieb_id').agg({'soll_stunden': 'max', 'ist_stunden': 'sum'})
+    summary['Differenz'] = summary['soll_stunden'] - summary['ist_stunden']
+    summary['Auslastung'] = (summary['ist_stunden'] / summary['soll_stunden'].replace(0, 1)) * 100
 
-# CSV Export Button
-csv = df.to_csv(index=False).encode('utf-8')
-st.download_button("Daten als CSV exportieren", csv, "einsaetze.csv", "text/csv")
+    def color_status(row):
+        # Farblogik: Rot <= 50%, Gelb <= 75% (was 25% unterschritten entspricht)
+        if row['Auslastung'] <= 50:
+            return ['background-color: #ffcccc'] * len(row)
+        elif row['Auslastung'] <= 75:
+            return ['background-color: #ffffcc'] * len(row)
+        return ['background-color: #ccffcc'] * len(row)
+
+    styled_summary = summary.style.apply(color_status, axis=1)
+    st.dataframe(styled_summary)
+
+# Löschen
+del_id = st.number_input("ID zum Löschen", min_value=1)
+if st.button("Einsatz entfernen"):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM einsaetze WHERE id = ?", (del_id,))
+    conn.commit()
+    conn.close()
+    save_db()
+    st.rerun()
