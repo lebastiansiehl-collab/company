@@ -4,6 +4,24 @@ import pandas as pd
 from github import Github
 import os
 from datetime import date
+import sqlite3
+import pandas as pd
+
+conn = sqlite3.connect("data/arbeitsmedizin.db")
+# Wir löschen die alte Tabelle und erstellen sie neu mit den richtigen Spalten
+conn.execute("DROP TABLE IF EXISTS einsaetze")
+conn.execute("""
+    CREATE TABLE einsaetze (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        betrieb_id INTEGER,
+        soll_stunden REAL,
+        ist_stunden REAL,
+        datum TEXT
+    )
+""")
+conn.commit()
+conn.close()
+print("Datenbankstruktur wurde aktualisiert.")
 
 # Konfiguration
 g = Github(st.secrets["GIT_TOKEN"])
