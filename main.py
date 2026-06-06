@@ -109,14 +109,17 @@ with tab2:
             st.divider()
             st.subheader(f"Buchungshistorie: {selected_betrieb}")
             
-            # Filtere Historie auf gewählten Betrieb
+            # Filtere Historie und ordne Spalten neu
             df_filtered = df_einsaetze[df_einsaetze['betrieb_id'] == selected_betrieb].copy()
             df_filtered['Löschen'] = False
             
-            # Editor für Historie (ohne unnötige Spalten)
+            # Editor für Historie: Datum, Stunden, Löschen anzeigen; ID verstecken
             edited_history = st.data_editor(
-                df_filtered[['id', 'ist_stunden', 'datum', 'Löschen']], 
-                column_config={"ist_stunden": st.column_config.NumberColumn(format="%.1f")},
+                df_filtered[['datum', 'ist_stunden', 'Löschen', 'id']], 
+                column_config={
+                    "ist_stunden": st.column_config.NumberColumn(format="%.1f"),
+                    "id": st.column_config.NumberColumn(hidden=True)
+                },
                 hide_index=True,
                 key="history_editor"
             )
