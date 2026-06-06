@@ -45,7 +45,7 @@ with tab1:
 
 # Tab 2: Tagesgeschäft
 with tab2:
-    # 1. Buchen
+    # 1. Buchen (Hier fügst du die Logik ein)
     st.subheader("Stunden erfassen")
     conn = sqlite3.connect(DB_PATH)
     betriebe = pd.read_sql_query("SELECT betrieb_id FROM betriebe", conn)
@@ -56,17 +56,23 @@ with tab2:
         with col1:
             sel_betrieb = st.selectbox("Betrieb auswählen", betriebe['betrieb_id'])
         with col2:
+            # Hier definierst du den Input für deine Zeitblöcke
             ist = st.number_input("Stunden", min_value=0.0, step=0.5, format="%.1f")
         
         if st.button("Buchen"):
             conn = sqlite3.connect(DB_PATH)
-            conn.execute("INSERT INTO einsaetze (betrieb_id, ist_stunden, datum) VALUES (?, ?, ?)", (sel_betrieb, ist, str(date.today())))
+            # SQL-Insert für die Zeitbuchung
+            conn.execute("INSERT INTO einsaetze (betrieb_id, ist_stunden, datum) VALUES (?, ?, ?)", 
+                         (sel_betrieb, ist, str(date.today())))
             conn.commit()
             conn.close()
             save_db()
             st.rerun()
     else:
         st.warning("Lege zuerst einen Betrieb in Tab 1 an.")
+
+    st.divider()
+    # Hier folgt dann direkt der Code für # 2. Übersicht...
 
     st.divider()
 
