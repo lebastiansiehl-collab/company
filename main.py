@@ -99,7 +99,7 @@ with tab2:
         df_overview = df_overview.round(1)
         df_overview['Status'] = df_overview['Auslastung'].apply(lambda x: "✅ OK" if x >= 100 else "⏳ offen")
 
-selection = st.dataframe(
+        selection = st.dataframe(
             df_overview, 
             hide_index=True, 
             use_container_width=True,
