@@ -88,9 +88,12 @@ with tab3:
         # Auslastung berechnen
         df_final['Auslastung'] = (df_final['ist_stunden'] / df_final['soll_stunden'].replace(0, 1)) * 100
 
-        # Editierbare Tabelle für Stammdaten
-        edited_df = st.data_editor(df_final, column_config={"soll_stunden": st.column_config.NumberColumn(format="%.1f")})
-        
+       # Ändere diese Zeile in deiner main.py (innerhalb von Tab 3):
+        edited_df = st.data_editor(
+        df_final, 
+        column_config={"soll_stunden": st.column_config.NumberColumn(format="%.1f")},
+        key="betriebe_editor"  # <--- Das ist die wichtige Ergänzung
+        )
         # Speichern der Änderungen
         if st.button("Soll-Stunden aktualisieren"):
             conn = sqlite3.connect(DB_PATH)
