@@ -40,9 +40,30 @@ def save_db():
     contents = repo.get_contents(DB_PATH)
     repo.update_file(contents.path, "Update DB via App", content, contents.sha)
 
-if "db_loaded" not in st.session_state:
-    load_db()
-    st.session_state.db_loaded = True
+def load_db():
+    if not os.path.exists("data"): os.makedirs("data")
+    try:
+        # Versuche, die Datei von GitHub zu holen
+        contents = repo.get_contents(DB_PATH)
+        with open(DB_PATH, "wb") as f:
+            f.write(contents.decoded_content)
+    except:
+        # Falls Datei nicht gefunden wurde: Neue leere DB erstellen
+        st.warning("Keine Datenbank gefunden, erstelle neue Struktur...")
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("""
+            CREATE TABLE einsaetze (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                betrieb_id INTEGER,
+                soll_stunden REAL,
+                ist_stunden REAL,
+                datum TEXT
+            )
+        """)
+        conn.commit()
+        conn.close()
+        save_db() # Einmalig hochladen
+        st.success("Datenbank-Struktur wurde neu erstellt.")
 
 st.title("Arbeitsmedizin Portal Pro")
 
