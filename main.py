@@ -74,6 +74,7 @@ with tab3:
     if not df_betriebe.empty:
         df_betriebe['betrieb_id'] = df_betriebe['betrieb_id'].astype(str)
         
+        # Merge-Logik
         if not df_einsaetze.empty:
             df_einsaetze['betrieb_id'] = df_einsaetze['betrieb_id'].astype(str)
             ist_sum = df_einsaetze.groupby('betrieb_id')['ist_stunden'].sum().reset_index()
@@ -82,11 +83,14 @@ with tab3:
             df_final = df_betriebe.copy()
             df_final['ist_stunden'] = 0.0
 
-        # Auslastung berechnen und runden
+        # Berechnungen
         df_final['Auslastung'] = (df_final['ist_stunden'] / df_final['soll_stunden'].replace(0, 1)) * 100
-        df_final = df_final.round(1) # Rundet alles auf eine Stelle
+        df_final = df_final.round(1)
+        
+        # Lösch-Spalte hinzufügen (Standard: False)
+        df_final['Löschen'] = False
 
-        # Editierbare Tabelle - Hier wird die Formatierung erzwungen
+        # Editierbare Tabelle
         edited_df = st.data_editor(
             df_final, 
             column_config={
@@ -98,13 +102,23 @@ with tab3:
             hide_index=True
         )
         
-        if st.button("Soll-Stunden aktualisieren"):
+        if st.button("Änderungen speichern (Aktualisieren / Löschen)"):
             conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            
             for _, row in edited_df.iterrows():
-                conn.execute("UPDATE betriebe SET soll_stunden = ? WHERE betrieb_id = ?", (row['soll_stunden'], row['betrieb_id']))
+                # 1. Löschen wenn Box angehakt
+                if row['Löschen'] == True:
+                    cursor.execute("DELETE FROM betriebe WHERE betrieb_id = ?", (row['betrieb_id'],))
+                    # Optional: Auch Einsätze löschen, wenn der Betrieb gelöscht wird
+                    cursor.execute("DELETE FROM einsaetze WHERE betrieb_id = ?", (row['betrieb_id'],))
+                # 2. Ansonsten nur Update
+                else:
+                    cursor.execute("UPDATE betriebe SET soll_stunden = ? WHERE betrieb_id = ?", (row['soll_stunden'], row['betrieb_id']))
+            
             conn.commit()
             conn.close()
-            save_db()
+            st.success("Daten aktualisiert.")
             st.rerun()
     else:
         st.info("Bitte lege in Tab 1 erst Betriebe an.")
