@@ -28,11 +28,11 @@ init_db()
 
 st.title("Arbeitsmedizin Portal Pro")
 
-tab1, tab2, tab3 = st.tabs(["Betriebe verwalten", "Stunden erfassen", "Übersicht"])
+tab1, tab2 = st.tabs(["Stammdaten (Betriebe)", "Tagesgeschäft (Buchen & Übersicht)"])
 
 # Tab 1: Stammdaten
 with tab1:
-    st.subheader("Betrieb anlegen / bearbeiten")
+    st.subheader("Betriebe verwalten")
     b_id = st.text_input("Betriebsname/ID")
     soll = st.number_input("Soll-Stunden (jährlich)", min_value=0.0, step=0.5, format="%.1f")
     if st.button("Speichern/Aktualisieren"):
@@ -43,79 +43,77 @@ with tab1:
         save_db()
         st.success(f"Betrieb {b_id} gespeichert.")
 
-# Tab 2: Stunden erfassen
+# Tab 2: Tagesgeschäft
 with tab2:
-    st.subheader("Ist-Stunden buchen")
+    # 1. Buchen
+    st.subheader("Stunden erfassen")
     conn = sqlite3.connect(DB_PATH)
     betriebe = pd.read_sql_query("SELECT betrieb_id FROM betriebe", conn)
     conn.close()
     
     if not betriebe.empty:
-        sel_betrieb = st.selectbox("Betrieb auswählen", betriebe['betrieb_id'])
-        ist = st.number_input("Geleistete Stunden", min_value=0.0, step=0.5, format="%.1f")
-        if st.button("Stunden buchen"):
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            sel_betrieb = st.selectbox("Betrieb auswählen", betriebe['betrieb_id'])
+        with col2:
+            ist = st.number_input("Stunden", min_value=0.0, step=0.5, format="%.1f")
+        
+        if st.button("Buchen"):
             conn = sqlite3.connect(DB_PATH)
             conn.execute("INSERT INTO einsaetze (betrieb_id, ist_stunden, datum) VALUES (?, ?, ?)", (sel_betrieb, ist, str(date.today())))
             conn.commit()
             conn.close()
             save_db()
-            st.success("Erfasst.")
+            st.rerun()
     else:
         st.warning("Lege zuerst einen Betrieb in Tab 1 an.")
 
-# Tab 3: Übersicht & Bearbeitung
-with tab3:
-    st.subheader("Betriebs-Übersicht")
+    st.divider()
+
+    # 2. Übersicht (Aggregiert)
+    st.subheader("Aktuelle Auslastung")
     conn = sqlite3.connect(DB_PATH)
     df_betriebe = pd.read_sql_query("SELECT * FROM betriebe", conn)
-    df_einsaetze = pd.read_sql_query("SELECT betrieb_id, ist_stunden FROM einsaetze", conn)
+    df_einsaetze = pd.read_sql_query("SELECT * FROM einsaetze", conn)
     conn.close()
 
     if not df_betriebe.empty:
-        # Duplikate entfernen und IDs stringifizieren
-        df_betriebe = df_betriebe.drop_duplicates(subset=['betrieb_id'])
-        df_betriebe['betrieb_id'] = df_betriebe['betrieb_id'].astype(str)
-        
-        # Merge-Logik
         if not df_einsaetze.empty:
-            df_einsaetze['betrieb_id'] = df_einsaetze['betrieb_id'].astype(str)
             ist_sum = df_einsaetze.groupby('betrieb_id')['ist_stunden'].sum().reset_index()
-            df_final = df_betriebe.merge(ist_sum, on='betrieb_id', how='left').fillna(0)
+            df_overview = df_betriebe.merge(ist_sum, on='betrieb_id', how='left').fillna(0)
         else:
-            df_final = df_betriebe.copy()
-            df_final['ist_stunden'] = 0.0
+            df_overview = df_betriebe.copy()
+            df_overview['ist_stunden'] = 0.0
 
-        # Berechnungen & Rundung
-        df_final['Auslastung'] = (df_final['ist_stunden'] / df_final['soll_stunden'].replace(0, 1)) * 100
-        df_final = df_final.round(1)
-        df_final['Löschen'] = False
+        df_overview['Auslastung'] = (df_overview['ist_stunden'] / df_overview['soll_stunden'].replace(0, 1)) * 100
+        df_overview = df_overview.round(1)
+        st.dataframe(df_overview, hide_index=True, use_container_width=True)
 
-        # Editierbare Tabelle
-        edited_df = st.data_editor(
-            df_final, 
-            column_config={
-                "soll_stunden": st.column_config.NumberColumn(format="%.1f"),
-                "ist_stunden": st.column_config.NumberColumn(format="%.1f"),
-                "Auslastung": st.column_config.NumberColumn(format="%.1f")
-            },
-            key="betriebe_editor",
-            hide_index=True
-        )
-        
-        if st.button("Änderungen speichern (Aktualisieren / Löschen)"):
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
+        # 3. Historie & Löschen
+        st.subheader("Buchungshistorie")
+        if not df_einsaetze.empty:
+            # Spalte für Lösch-Checkbox hinzufügen
+            df_einsaetze['Löschen'] = False
             
-            for _, row in edited_df.iterrows():
-                if row['Löschen'] == True:
-                    cursor.execute("DELETE FROM betriebe WHERE betrieb_id = ?", (row['betrieb_id'],))
-                    cursor.execute("DELETE FROM einsaetze WHERE betrieb_id = ?", (row['betrieb_id'],))
-                else:
-                    cursor.execute("UPDATE betriebe SET soll_stunden = ? WHERE betrieb_id = ?", (row['soll_stunden'], row['betrieb_id']))
+            # Editor für Historie
+            edited_history = st.data_editor(
+                df_einsaetze, 
+                column_config={"ist_stunden": st.column_config.NumberColumn(format="%.1f")},
+                hide_index=True,
+                key="history_editor"
+            )
             
-            conn.commit()
-            conn.close()
-            save_db()
-            st.rerun()
+            if st.button("Ausgewählte Buchungen löschen"):
+                to_delete = edited_history[edited_history['Löschen'] == True]
+                if not to_delete.empty:
+                    conn = sqlite3.connect(DB_PATH)
+                    for _, row in to_delete.iterrows():
+                        conn.execute("DELETE FROM einsaetze WHERE id = ?", (row['id'],))
+                    conn.commit()
+                    conn.close()
+                    save_db()
+                    st.rerun()
+        else:
+            st.info("Keine Buchungen vorhanden.")
     else:
-        st.info("Bitte lege in Tab 1 erst Betriebe an.")
+        st.info("Keine Betriebe angelegt.")
