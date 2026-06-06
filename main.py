@@ -113,12 +113,12 @@ with tab2:
             df_filtered = df_einsaetze[df_einsaetze['betrieb_id'] == selected_betrieb].copy()
             df_filtered['Löschen'] = False
             
-            # Editor für Historie: Datum, Stunden, Löschen anzeigen; ID verstecken
+# Editor für Historie: Datum, Stunden, Löschen anzeigen; ID verstecken
             edited_history = st.data_editor(
                 df_filtered[['datum', 'ist_stunden', 'Löschen', 'id']], 
                 column_config={
                     "ist_stunden": st.column_config.NumberColumn(format="%.1f"),
-                    "id": st.column_config.NumberColumn(hidden=True)
+                    "id": st.column_config.Column(hidden=True)  # <-- Hier: NumberColumn zu Column geändert
                 },
                 hide_index=True,
                 key="history_editor"
