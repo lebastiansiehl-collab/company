@@ -78,9 +78,14 @@ with tab2:
     conn.close()
 
     if not df_betriebe.empty:
+        df_betriebe['betrieb_id'] = df_betriebe['betrieb_id'].astype(str)
+        df_betriebe = df_betriebe.drop_duplicates(subset=['betrieb_id'])
+        
         if not df_einsaetze.empty:
+            df_einsaetze['betrieb_id'] = df_einsaetze['betrieb_id'].astype(str)
             ist_sum = df_einsaetze.groupby('betrieb_id')['ist_stunden'].sum().reset_index()
-            df_overview = df_betriebe.merge(ist_sum, on='betrieb_id', how='left').fillna(0)
+            # Expliziter Merge
+            df_overview = pd.merge(df_betriebe, ist_sum, on='betrieb_id', how='left').fillna(0)
         else:
             df_overview = df_betriebe.copy()
             df_overview['ist_stunden'] = 0.0
