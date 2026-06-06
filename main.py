@@ -72,6 +72,8 @@ with tab3:
     conn.close()
 
     if not df_betriebe.empty:
+        # Duplikate entfernen und IDs stringifizieren
+        df_betriebe = df_betriebe.drop_duplicates(subset=['betrieb_id'])
         df_betriebe['betrieb_id'] = df_betriebe['betrieb_id'].astype(str)
         
         # Merge-Logik
@@ -83,11 +85,9 @@ with tab3:
             df_final = df_betriebe.copy()
             df_final['ist_stunden'] = 0.0
 
-        # Berechnungen
+        # Berechnungen & Rundung
         df_final['Auslastung'] = (df_final['ist_stunden'] / df_final['soll_stunden'].replace(0, 1)) * 100
         df_final = df_final.round(1)
-        
-        # Lösch-Spalte hinzufügen (Standard: False)
         df_final['Löschen'] = False
 
         # Editierbare Tabelle
@@ -107,50 +107,15 @@ with tab3:
             cursor = conn.cursor()
             
             for _, row in edited_df.iterrows():
-                # 1. Löschen wenn Box angehakt
                 if row['Löschen'] == True:
                     cursor.execute("DELETE FROM betriebe WHERE betrieb_id = ?", (row['betrieb_id'],))
-                    # Optional: Auch Einsätze löschen, wenn der Betrieb gelöscht wird
                     cursor.execute("DELETE FROM einsaetze WHERE betrieb_id = ?", (row['betrieb_id'],))
-                # 2. Ansonsten nur Update
                 else:
                     cursor.execute("UPDATE betriebe SET soll_stunden = ? WHERE betrieb_id = ?", (row['soll_stunden'], row['betrieb_id']))
             
             conn.commit()
             conn.close()
-            st.success("Daten aktualisiert.")
+            save_db()
             st.rerun()
     else:
         st.info("Bitte lege in Tab 1 erst Betriebe an.")
-
-    if not df_betriebe.empty:
-        # Aggregation
-        if not df_einsaetze.empty:
-            ist_sum = df_einsaetze.groupby('betrieb_id')['ist_stunden'].sum().reset_index()
-            df_final = df_betriebe.merge(ist_sum, on='betrieb_id', how='left').fillna(0)
-        else:
-            df_final = df_betriebe
-            df_final['ist_stunden'] = 0.0
-
-        df_final['Auslastung'] = (df_final['ist_stunden'] / df_final['soll_stunden'].replace(0, 1)) * 100
-
-        # Editierbare Tabelle für Stammdaten
-        edited_df = st.data_editor(df_final, column_config={"soll_stunden": st.column_config.NumberColumn(format="%.1f")})
-        
-        # Speichern der Änderungen aus der Tabelle
-        if st.button("Soll-Stunden in Tabelle aktualisieren"):
-            conn = sqlite3.connect(DB_PATH)
-            for _, row in edited_df.iterrows():
-                conn.execute("UPDATE betriebe SET soll_stunden = ? WHERE betrieb_id = ?", (row['soll_stunden'], row['betrieb_id']))
-            conn.commit()
-            conn.close()
-            save_db()
-            st.rerun()
-
-        # Farblogik
-        def color_status(val):
-            if val <= 50: return 'background-color: #ffcccc'
-            if val <= 75: return 'background-color: #ffffcc'
-            return 'background-color: #ccffcc'
-        
-        st.dataframe(df_final.style.map(color_status, subset=['Auslastung']))
