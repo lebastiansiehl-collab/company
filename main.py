@@ -98,13 +98,21 @@ with tab2:
         df_overview['Auslastung'] = (df_overview['ist_stunden'] / df_overview['soll_stunden'].replace(0, 1)) * 100
         df_overview = df_overview.round(1)
 
-        # Tabelle mit Auswahlfunktion
+      # Tabelle mit Auswahlfunktion und Fortschrittsbalken
         selection = st.dataframe(
             df_overview, 
             hide_index=True, 
             use_container_width=True,
             selection_mode="single-row", 
-            on_select="rerun"
+            on_select="rerun",
+            column_config={
+                "Auslastung": st.column_config.ProgressColumn(
+                    "Auslastung",
+                    format="%.1f%%",
+                    min_value=0,
+                    max_value=100,
+                )
+            }
         )
 
         # 3. Historie (erscheint nur bei Auswahl)
