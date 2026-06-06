@@ -118,7 +118,7 @@ with tab2:
                 df_filtered[['datum', 'ist_stunden', 'Löschen', 'id']], 
                 column_config={
                     "ist_stunden": st.column_config.NumberColumn(format="%.1f"),
-                    "id": st.column_config.Column(hidden=True)  # <-- Hier: NumberColumn zu Column geändert
+                    "id": None  # <--- Einfach auf None setzen, das blendet die Spalte komplett aus
                 },
                 hide_index=True,
                 key="history_editor"
