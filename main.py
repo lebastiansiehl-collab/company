@@ -70,7 +70,7 @@ with tab2:
 
     st.divider()
 
-    # 2. Übersicht (Aggregiert)
+    # 2. Übersicht (Aggregiert & Interaktiv)
     st.subheader("Aktuelle Auslastung")
     conn = sqlite3.connect(DB_PATH)
     df_betriebe = pd.read_sql_query("SELECT * FROM betriebe", conn)
@@ -84,7 +84,6 @@ with tab2:
         if not df_einsaetze.empty:
             df_einsaetze['betrieb_id'] = df_einsaetze['betrieb_id'].astype(str)
             ist_sum = df_einsaetze.groupby('betrieb_id')['ist_stunden'].sum().reset_index()
-            # Expliziter Merge
             df_overview = pd.merge(df_betriebe, ist_sum, on='betrieb_id', how='left').fillna(0)
         else:
             df_overview = df_betriebe.copy()
@@ -92,17 +91,31 @@ with tab2:
 
         df_overview['Auslastung'] = (df_overview['ist_stunden'] / df_overview['soll_stunden'].replace(0, 1)) * 100
         df_overview = df_overview.round(1)
-        st.dataframe(df_overview, hide_index=True, use_container_width=True)
 
-        # 3. Historie & Löschen
-        st.subheader("Buchungshistorie")
-        if not df_einsaetze.empty:
-            # Spalte für Lösch-Checkbox hinzufügen
-            df_einsaetze['Löschen'] = False
+        # Tabelle mit Auswahlfunktion
+        selection = st.dataframe(
+            df_overview, 
+            hide_index=True, 
+            use_container_width=True,
+            selection_mode="single-row", 
+            on_select="rerun"
+        )
+
+        # 3. Historie (erscheint nur bei Auswahl)
+        if selection.selection.rows:
+            selected_index = selection.selection.rows[0]
+            selected_betrieb = df_overview.iloc[selected_index]['betrieb_id']
             
-            # Editor für Historie
+            st.divider()
+            st.subheader(f"Buchungshistorie: {selected_betrieb}")
+            
+            # Filtere Historie auf gewählten Betrieb
+            df_filtered = df_einsaetze[df_einsaetze['betrieb_id'] == selected_betrieb].copy()
+            df_filtered['Löschen'] = False
+            
+            # Editor für Historie (ohne unnötige Spalten)
             edited_history = st.data_editor(
-                df_einsaetze, 
+                df_filtered[['id', 'ist_stunden', 'datum', 'Löschen']], 
                 column_config={"ist_stunden": st.column_config.NumberColumn(format="%.1f")},
                 hide_index=True,
                 key="history_editor"
@@ -119,6 +132,7 @@ with tab2:
                     save_db()
                     st.rerun()
         else:
-            st.info("Keine Buchungen vorhanden.")
+            st.info("Klicke auf eine Zeile in der Tabelle oben, um die Buchungshistorie zu sehen.")
+            
     else:
         st.info("Keine Betriebe angelegt.")
