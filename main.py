@@ -102,3 +102,4 @@ with tab3:
             return 'background-color: #ccffcc'
         
         st.dataframe(df_final.style.map(color_status, subset=['Auslastung']))
+        
