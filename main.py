@@ -97,9 +97,9 @@ with tab2:
 
         df_overview['Auslastung'] = (df_overview['ist_stunden'] / df_overview['soll_stunden'].replace(0, 1)) * 100
         df_overview = df_overview.round(1)
+        df_overview['Status'] = df_overview['Auslastung'].apply(lambda x: "✅ OK" if x >= 100 else "⏳ offen")
 
-      # Tabelle mit Auswahlfunktion und Fortschrittsbalken
-        selection = st.dataframe(
+selection = st.dataframe(
             df_overview, 
             hide_index=True, 
             use_container_width=True,
