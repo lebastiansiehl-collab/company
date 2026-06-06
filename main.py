@@ -4,116 +4,101 @@ import pandas as pd
 from github import Github
 import os
 from datetime import date
-import sqlite3
-import pandas as pd
-
-conn = sqlite3.connect("data/arbeitsmedizin.db")
-# Wir löschen die alte Tabelle und erstellen sie neu mit den richtigen Spalten
-conn.execute("DROP TABLE IF EXISTS einsaetze")
-conn.execute("""
-    CREATE TABLE einsaetze (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        betrieb_id INTEGER,
-        soll_stunden REAL,
-        ist_stunden REAL,
-        datum TEXT
-    )
-""")
-conn.commit()
-conn.close()
-print("Datenbankstruktur wurde aktualisiert.")
 
 # Konfiguration
 g = Github(st.secrets["GIT_TOKEN"])
 repo = g.get_repo("lebastiansiehl-collab/company")
 DB_PATH = "data/arbeitsmedizin.db"
 
-def load_db():
+def init_db():
     if not os.path.exists("data"): os.makedirs("data")
-    contents = repo.get_contents(DB_PATH)
-    with open(DB_PATH, "wb") as f:
-        f.write(contents.decoded_content)
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("CREATE TABLE IF NOT EXISTS betriebe (betrieb_id TEXT PRIMARY KEY, soll_stunden REAL)")
+    conn.execute("CREATE TABLE IF NOT EXISTS einsaetze (id INTEGER PRIMARY KEY AUTOINCREMENT, betrieb_id TEXT, ist_stunden REAL, datum TEXT)")
+    conn.commit()
+    conn.close()
 
 def save_db():
     with open(DB_PATH, "rb") as f:
         content = f.read()
     contents = repo.get_contents(DB_PATH)
-    repo.update_file(contents.path, "Update DB via App", content, contents.sha)
+    repo.update_file(contents.path, "Update DB", content, contents.sha)
 
-def load_db():
-    if not os.path.exists("data"): os.makedirs("data")
-    try:
-        # Versuche, die Datei von GitHub zu holen
-        contents = repo.get_contents(DB_PATH)
-        with open(DB_PATH, "wb") as f:
-            f.write(contents.decoded_content)
-    except:
-        # Falls Datei nicht gefunden wurde: Neue leere DB erstellen
-        st.warning("Keine Datenbank gefunden, erstelle neue Struktur...")
-        conn = sqlite3.connect(DB_PATH)
-        conn.execute("""
-            CREATE TABLE einsaetze (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                betrieb_id INTEGER,
-                soll_stunden REAL,
-                ist_stunden REAL,
-                datum TEXT
-            )
-        """)
-        conn.commit()
-        conn.close()
-        save_db() # Einmalig hochladen
-        st.success("Datenbank-Struktur wurde neu erstellt.")
+init_db()
 
 st.title("Arbeitsmedizin Portal Pro")
 
-# Formular
-with st.form("einsatz_form"):
-    col1, col2 = st.columns(2)
-    betrieb_id = col1.number_input("Betriebs-ID", min_value=1)
-    soll_stunden = col1.number_input("Soll-Stunden (jährlich)", min_value=0)
-    ist_stunden = col2.number_input("Ist-Stunden (jetzt)", min_value=0)
-    submit = st.form_submit_button("Speichern")
-    
-    if submit:
+tab1, tab2, tab3 = st.tabs(["Betriebe verwalten", "Stunden erfassen", "Übersicht"])
+
+# Tab 1: Stammdaten
+with tab1:
+    st.subheader("Betrieb anlegen / bearbeiten")
+    b_id = st.text_input("Betriebsname/ID")
+    soll = st.number_input("Soll-Stunden (jährlich)", min_value=0.0, step=0.5, format="%.1f")
+    if st.button("Speichern/Aktualisieren"):
         conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("INSERT INTO einsaetze (betrieb_id, soll_stunden, ist_stunden, datum) VALUES (?, ?, ?, ?)", 
-                  (betrieb_id, soll_stunden, ist_stunden, str(date.today())))
+        conn.execute("INSERT OR REPLACE INTO betriebe (betrieb_id, soll_stunden) VALUES (?, ?)", (b_id, soll))
         conn.commit()
         conn.close()
         save_db()
-        st.success("Gespeichert!")
+        st.success(f"Betrieb {b_id} gespeichert.")
 
-# Aggregierte Übersicht mit Farblogik
-st.subheader("Betriebs-Übersicht")
-conn = sqlite3.connect(DB_PATH)
-df = pd.read_sql_query("SELECT * FROM einsaetze", conn)
-conn.close()
-
-if not df.empty:
-    summary = df.groupby('betrieb_id').agg({'soll_stunden': 'max', 'ist_stunden': 'sum'})
-    summary['Differenz'] = summary['soll_stunden'] - summary['ist_stunden']
-    summary['Auslastung'] = (summary['ist_stunden'] / summary['soll_stunden'].replace(0, 1)) * 100
-
-    def color_status(row):
-        # Farblogik: Rot <= 50%, Gelb <= 75% (was 25% unterschritten entspricht)
-        if row['Auslastung'] <= 50:
-            return ['background-color: #ffcccc'] * len(row)
-        elif row['Auslastung'] <= 75:
-            return ['background-color: #ffffcc'] * len(row)
-        return ['background-color: #ccffcc'] * len(row)
-
-    styled_summary = summary.style.apply(color_status, axis=1)
-    st.dataframe(styled_summary)
-
-# Löschen
-del_id = st.number_input("ID zum Löschen", min_value=1)
-if st.button("Einsatz entfernen"):
+# Tab 2: Stunden erfassen
+with tab2:
+    st.subheader("Ist-Stunden buchen")
     conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("DELETE FROM einsaetze WHERE id = ?", (del_id,))
-    conn.commit()
+    betriebe = pd.read_sql_query("SELECT betrieb_id FROM betriebe", conn)
     conn.close()
-    save_db()
-    st.rerun()
+    
+    if not betriebe.empty:
+        sel_betrieb = st.selectbox("Betrieb auswählen", betriebe['betrieb_id'])
+        ist = st.number_input("Geleistete Stunden", min_value=0.0, step=0.5, format="%.1f")
+        if st.button("Stunden buchen"):
+            conn = sqlite3.connect(DB_PATH)
+            conn.execute("INSERT INTO einsaetze (betrieb_id, ist_stunden, datum) VALUES (?, ?, ?)", (sel_betrieb, ist, str(date.today())))
+            conn.commit()
+            conn.close()
+            save_db()
+            st.success("Erfasst.")
+    else:
+        st.warning("Lege zuerst einen Betrieb in Tab 1 an.")
+
+# Tab 3: Übersicht & Bearbeitung
+with tab3:
+    st.subheader("Betriebs-Übersicht")
+    conn = sqlite3.connect(DB_PATH)
+    df_betriebe = pd.read_sql_query("SELECT * FROM betriebe", conn)
+    df_einsaetze = pd.read_sql_query("SELECT betrieb_id, ist_stunden FROM einsaetze", conn)
+    conn.close()
+
+    if not df_betriebe.empty:
+        # Aggregation
+        if not df_einsaetze.empty:
+            ist_sum = df_einsaetze.groupby('betrieb_id')['ist_stunden'].sum().reset_index()
+            df_final = df_betriebe.merge(ist_sum, on='betrieb_id', how='left').fillna(0)
+        else:
+            df_final = df_betriebe
+            df_final['ist_stunden'] = 0.0
+
+        df_final['Auslastung'] = (df_final['ist_stunden'] / df_final['soll_stunden'].replace(0, 1)) * 100
+
+        # Editierbare Tabelle für Stammdaten
+        edited_df = st.data_editor(df_final, column_config={"soll_stunden": st.column_config.NumberColumn(format="%.1f")})
+        
+        # Speichern der Änderungen aus der Tabelle
+        if st.button("Soll-Stunden in Tabelle aktualisieren"):
+            conn = sqlite3.connect(DB_PATH)
+            for _, row in edited_df.iterrows():
+                conn.execute("UPDATE betriebe SET soll_stunden = ? WHERE betrieb_id = ?", (row['soll_stunden'], row['betrieb_id']))
+            conn.commit()
+            conn.close()
+            save_db()
+            st.rerun()
+
+        # Farblogik
+        def color_status(val):
+            if val <= 50: return 'background-color: #ffcccc'
+            if val <= 75: return 'background-color: #ffffcc'
+            return 'background-color: #ccffcc'
+        
+        st.dataframe(df_final.style.map(color_status, subset=['Auslastung']))
