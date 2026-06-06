@@ -72,29 +72,32 @@ with tab3:
     conn.close()
 
     if not df_betriebe.empty:
-        # 1. Sicherstellen, dass die IDs Text sind, damit der Merge klappt
         df_betriebe['betrieb_id'] = df_betriebe['betrieb_id'].astype(str)
         
-        # 2. Logik, wenn Einsätze vorhanden sind
         if not df_einsaetze.empty:
             df_einsaetze['betrieb_id'] = df_einsaetze['betrieb_id'].astype(str)
             ist_sum = df_einsaetze.groupby('betrieb_id')['ist_stunden'].sum().reset_index()
             df_final = df_betriebe.merge(ist_sum, on='betrieb_id', how='left').fillna(0)
         else:
-            # 2b. Logik, wenn noch keine Einsätze gebucht wurden
             df_final = df_betriebe.copy()
             df_final['ist_stunden'] = 0.0
 
-        # Auslastung berechnen
+        # Auslastung berechnen und runden
         df_final['Auslastung'] = (df_final['ist_stunden'] / df_final['soll_stunden'].replace(0, 1)) * 100
+        df_final = df_final.round(1) # Rundet alles auf eine Stelle
 
-       # Ändere diese Zeile in deiner main.py (innerhalb von Tab 3):
+        # Editierbare Tabelle - Hier wird die Formatierung erzwungen
         edited_df = st.data_editor(
-        df_final, 
-        column_config={"soll_stunden": st.column_config.NumberColumn(format="%.1f")},
-        key="betriebe_editor"  # <--- Das ist die wichtige Ergänzung
+            df_final, 
+            column_config={
+                "soll_stunden": st.column_config.NumberColumn(format="%.1f"),
+                "ist_stunden": st.column_config.NumberColumn(format="%.1f"),
+                "Auslastung": st.column_config.NumberColumn(format="%.1f")
+            },
+            key="betriebe_editor",
+            hide_index=True
         )
-        # Speichern der Änderungen
+        
         if st.button("Soll-Stunden aktualisieren"):
             conn = sqlite3.connect(DB_PATH)
             for _, row in edited_df.iterrows():
@@ -103,15 +106,6 @@ with tab3:
             conn.close()
             save_db()
             st.rerun()
-
-        # Farblogik
-        def color_status(val):
-            if val <= 50: return 'background-color: #ffcccc'
-            if val <= 75: return 'background-color: #ffffcc'
-            return 'background-color: #ccffcc'
-        
-        # Anzeige
-        st.dataframe(df_final.style.map(color_status, subset=['Auslastung']))
     else:
         st.info("Bitte lege in Tab 1 erst Betriebe an.")
 
