@@ -132,22 +132,25 @@ with tab2:
                 df_filtered[['datum', 'ist_stunden', 'Löschen', 'id']], 
                 column_config={
                     "ist_stunden": st.column_config.NumberColumn(format="%.1f"),
-                    "id": None  # <--- Einfach auf None setzen, das blendet die Spalte komplett aus
+                    "id": None
                 },
                 hide_index=True,
                 key="history_editor"
             )
             
-            if st.button("Ausgewählte Buchungen löschen"):
+            if st.button("Änderungen speichern & Löschen ausführen"):
+                conn = sqlite3.connect(DB_PATH)
+                # 1. Editiertes speichern
+                for _, row in edited_history.iterrows():
+                    conn.execute("UPDATE einsaetze SET ist_stunden = ? WHERE id = ?", (row['ist_stunden'], row['id']))
+                # 2. Markiertes löschen
                 to_delete = edited_history[edited_history['Löschen'] == True]
-                if not to_delete.empty:
-                    conn = sqlite3.connect(DB_PATH)
-                    for _, row in to_delete.iterrows():
-                        conn.execute("DELETE FROM einsaetze WHERE id = ?", (row['id'],))
-                    conn.commit()
-                    conn.close()
-                    save_db()
-                    st.rerun()
+                for _, row in to_delete.iterrows():
+                    conn.execute("DELETE FROM einsaetze WHERE id = ?", (row['id'],))
+                conn.commit()
+                conn.close()
+                save_db()
+                st.rerun(
         else:
             st.info("Klicke auf eine Zeile in der Tabelle oben, um die Buchungshistorie zu sehen.")
             
