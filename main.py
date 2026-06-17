@@ -64,8 +64,11 @@ with tab2:
 
     if not df_betriebe.empty:
         df_betriebe['betrieb_id'] = df_betriebe['betrieb_id'].astype(str)
+        
         if not df_einsaetze.empty:
             ist_sum = df_einsaetze.groupby('betrieb_id')['ist_stunden'].sum().reset_index()
+            # Hier: sicherstellen, dass auch ist_sum betrieb_id als String hat
+            ist_sum['betrieb_id'] = ist_sum['betrieb_id'].astype(str)
             df_overview = pd.merge(df_betriebe, ist_sum, on='betrieb_id', how='left').fillna(0)
         else:
             df_overview = df_betriebe.copy()
