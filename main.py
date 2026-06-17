@@ -30,25 +30,40 @@ tab1, tab2 = st.tabs(["Stammdaten (Betriebe)", "Tagesgeschäft (Buchen & Übersi
 
 with tab1:
     st.subheader("Betriebe verwalten")
-    b_id = st.text_input("Betriebsname/ID")
-    soll = st.number_input("Soll-Stunden (jährlich)", min_value=0.0, step=0.5, format="%.1f")
-    if st.button("Speichern/Aktualisieren"):
-        conn = sqlite3.connect(DB_PATH)
-        conn.execute("INSERT OR REPLACE INTO betriebe (betrieb_id, soll_stunden) VALUES (?, ?)", (b_id, soll))
-        conn.commit()
-        conn.close()
-        save_db()
-        st.success(f"Betrieb {b_id} gespeichert.")
+    conn = sqlite3.connect(DB_PATH)
+    all_betriebe = pd.read_sql_query("SELECT * FROM betriebe", conn)
+    conn.close()
+    
+    mode = st.radio("Modus", ["Neu anlegen", "Bestehenden bearbeiten"])
+    
+    if mode == "Neu anlegen":
+        b_id = st.text_input("Betriebsname/ID")
+        soll = st.number_input("Soll-Stunden (jährlich)", min_value=0.0, step=0.5, format="%.1f")
+        if st.button("Speichern"):
+            conn = sqlite3.connect(DB_PATH)
+            conn.execute("INSERT INTO betriebe (betrieb_id, soll_stunden) VALUES (?, ?)", (b_id, soll))
+            conn.commit()
+            conn.close()
+            save_db()
+            st.rerun()
+    else:
+        if not all_betriebe.empty:
+            sel_b = st.selectbox("Betrieb wählen", all_betriebe['betrieb_id'])
+            curr_soll = all_betriebe[all_betriebe['betrieb_id'] == sel_b]['soll_stunden'].values[0]
+            new_soll = st.number_input("Soll-Stunden anpassen", value=float(curr_soll), step=0.5)
+            if st.button("Änderungen speichern"):
+                conn = sqlite3.connect(DB_PATH)
+                conn.execute("UPDATE betriebe SET soll_stunden = ? WHERE betrieb_id = ?", (new_soll, sel_b))
+                conn.commit()
+                conn.close()
+                save_db()
+                st.rerun()
 
 with tab2:
     conn = sqlite3.connect(DB_PATH)
     df_betriebe = pd.read_sql_query("SELECT * FROM betriebe", conn)
     df_einsaetze = pd.read_sql_query("SELECT * FROM einsaetze", conn)
     conn.close()
-
-    # Datentypen für ID-Spalten erzwingen
-    df_betriebe['betrieb_id'] = df_betriebe['betrieb_id'].astype(str)
-    df_einsaetze['betrieb_id'] = df_einsaetze['betrieb_id'].astype(str)
 
     st.subheader("Stunden erfassen")
     if not df_betriebe.empty:
@@ -67,6 +82,7 @@ with tab2:
     st.subheader("Aktuelle Auslastung")
 
     if not df_betriebe.empty:
+        df_betriebe['betrieb_id'] = df_betriebe['betrieb_id'].astype(str)
         if not df_einsaetze.empty:
             ist_sum = df_einsaetze.groupby('betrieb_id')['ist_stunden'].sum().reset_index()
             ist_sum['betrieb_id'] = ist_sum['betrieb_id'].astype(str)
@@ -75,6 +91,7 @@ with tab2:
             df_overview = df_betriebe.copy()
             df_overview['ist_stunden'] = 0.0
 
+        df_overview = df_overview.sort_values('betrieb_id')
         df_overview['Auslastung'] = (df_overview['ist_stunden'] / df_overview['soll_stunden'].replace(0, 1)) * 100
         df_overview['diff_val'] = df_overview['soll_stunden'] - df_overview['ist_stunden']
         df_overview['Saldo'] = df_overview['diff_val'].apply(lambda x: f"{x:.1f} offen" if x > 0 else f"{abs(x):.1f} über Plan")
