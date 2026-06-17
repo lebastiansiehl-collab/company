@@ -116,7 +116,7 @@ with tab2:
         )
 
 # 3. Historie
-st.divider()
+    st.divider()
     if selection.selection.rows:
         selected_index = selection.selection.rows[0]
         selected_betrieb = df_overview.iloc[selected_index]['betrieb_id']
@@ -126,7 +126,6 @@ st.divider()
         df_filtered = df_einsaetze[df_einsaetze['betrieb_id'] == selected_betrieb].copy()
         df_filtered['Löschen'] = False
         
-        # Editor zur Zwischenspeicherung in Session State
         edited_history = st.data_editor(
             df_filtered[['datum', 'ist_stunden', 'Löschen', 'id']], 
             column_config={
@@ -137,14 +136,11 @@ st.divider()
             key="history_editor"
         )
         
-        # Button zur Verarbeitung
         if st.button("Änderungen speichern & Löschen ausführen"):
             conn = sqlite3.connect(DB_PATH)
-            # 1. Update der Stunden (falls geändert)
             for _, row in edited_history.iterrows():
                 conn.execute("UPDATE einsaetze SET ist_stunden = ? WHERE id = ?", (row['ist_stunden'], row['id']))
             
-            # 2. Löschen der markierten Zeilen
             to_delete = edited_history[edited_history['Löschen'] == True]
             for _, row in to_delete.iterrows():
                 conn.execute("DELETE FROM einsaetze WHERE id = ?", (row['id'],))
@@ -152,6 +148,6 @@ st.divider()
             conn.commit()
             conn.close()
             save_db()
-            st.rerun() 
+            st.rerun()
     else:
         st.info("Klicke auf eine Zeile in der Tabelle oben, um die Buchungshistorie zu sehen.")
