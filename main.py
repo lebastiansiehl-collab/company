@@ -95,10 +95,17 @@ with tab2:
             df_overview = df_betriebe.copy()
             df_overview['ist_stunden'] = 0.0
 
-        df_overview['Auslastung'] = (df_overview['ist_stunden'] / df_overview['soll_stunden'].replace(0, 1)) * 100
+# Zeile 98: Berechnung der Reststunden / Überstunden
+        # Bei negativen Werten ist es Übererfüllung, bei positiven ist es noch offen
+        df_overview['Diff'] = (df_overview['soll_stunden'] - df_overview['ist_stunden'])
+        
+        # Zur besseren Lesbarkeit: 
+        # Wenn Diff > 0: "noch offen"
+        # Wenn Diff <= 0: "über Plan" (negierter Wert als Überstunden)
+        df_overview['Saldo'] = df_overview['Diff'].apply(lambda x: f"{x:.1f} offen" if x > 0 else f"{abs(x):.1f} über Plan")
+        
         df_overview = df_overview.round(1)
         df_overview['Status'] = df_overview['Auslastung'].apply(lambda x: "✅ OK" if x >= 100 else "⏳ offen")
-
 # Zeile 102: Tabelle mit Auswahl
         selection = st.dataframe(
             df_overview, 
