@@ -116,4 +116,3 @@ with tab2:
                 st.rerun()
     else:
         st.info("Keine Betriebe angelegt.")
-        
