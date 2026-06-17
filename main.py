@@ -5,7 +5,6 @@ from github import Github
 import os
 from datetime import date
 
-# Konfiguration
 g = Github(st.secrets["GIT_TOKEN"])
 repo = g.get_repo("lebastiansiehl-collab/company")
 DB_PATH = "data/arbeitsmedizin.db"
@@ -27,10 +26,8 @@ def save_db():
 init_db()
 
 st.title("Arbeitsmedizin Portal Pro")
-
 tab1, tab2 = st.tabs(["Stammdaten (Betriebe)", "Tagesgeschäft (Buchen & Übersicht)"])
 
-# Tab 1: Stammdaten
 with tab1:
     st.subheader("Betriebe verwalten")
     b_id = st.text_input("Betriebsname/ID")
@@ -43,150 +40,79 @@ with tab1:
         save_db()
         st.success(f"Betrieb {b_id} gespeichert.")
 
-# Tab 2: Tagesgeschäft
 with tab2:
-    # 1. Buchen (Hier fügst du die Logik ein)
     st.subheader("Stunden erfassen")
     conn = sqlite3.connect(DB_PATH)
     betriebe = pd.read_sql_query("SELECT betrieb_id FROM betriebe", conn)
     conn.close()
     
-if not df_betriebe.empty:
-        df_betriebe['betrieb_id'] = df_betriebe['betrieb_id'].astype(str)
-        df_betriebe = df_betriebe.drop_duplicates(subset=['betrieb_id'])
+    if not betriebe.empty:
+        b_select = st.selectbox("Betrieb auswählen", betriebe['betrieb_id'])
+        h_input = st.number_input("Stunden", min_value=0.0, step=0.5)
+        d_input = st.date_input("Datum", date.today())
+        if st.button("Buchen"):
+            conn = sqlite3.connect(DB_PATH)
+            conn.execute("INSERT INTO einsaetze (betrieb_id, ist_stunden, datum) VALUES (?, ?, ?)", (b_select, h_input, str(d_input)))
+            conn.commit()
+            conn.close()
+            save_db()
+            st.rerun()
 
+    st.divider()
+    st.subheader("Aktuelle Auslastung")
+    conn = sqlite3.connect(DB_PATH)
+    df_betriebe = pd.read_sql_query("SELECT * FROM betriebe", conn)
+    df_einsaetze = pd.read_sql_query("SELECT * FROM einsaetze", conn)
+    conn.close()
+
+    if not df_betriebe.empty:
+        df_betriebe['betrieb_id'] = df_betriebe['betrieb_id'].astype(str)
         if not df_einsaetze.empty:
-            df_einsaetze['betrieb_id'] = df_einsaetze['betrieb_id'].astype(str)
             ist_sum = df_einsaetze.groupby('betrieb_id')['ist_stunden'].sum().reset_index()
-            df_overview = pd.merge(df_betriebe, ist_sum, on='betrieb_id', how='left')
-            df_overview['ist_stunden'] = df_overview['ist_stunden'].fillna(0)
+            df_overview = pd.merge(df_betriebe, ist_sum, on='betrieb_id', how='left').fillna(0)
         else:
             df_overview = df_betriebe.copy()
             df_overview['ist_stunden'] = 0.0
 
-        # Berechnungen zentral durchführen
         df_overview['Auslastung'] = (df_overview['ist_stunden'] / df_overview['soll_stunden'].replace(0, 1)) * 100
-        
-        # Saldo-Logik: Diff > 0 = offen, Diff <= 0 = über Plan
         df_overview['diff_val'] = df_overview['soll_stunden'] - df_overview['ist_stunden']
         df_overview['Saldo'] = df_overview['diff_val'].apply(lambda x: f"{x:.1f} offen" if x > 0 else f"{abs(x):.1f} über Plan")
-        
-        # Status
         df_overview['Status'] = df_overview['Auslastung'].apply(lambda x: "✅ OK" if x >= 100 else "⏳ offen")
         
-        df_overview = df_overview.round(1)
-
-        # Tabelle anzeigen
         selection = st.dataframe(
             df_overview[['betrieb_id', 'soll_stunden', 'ist_stunden', 'Auslastung', 'Saldo', 'Status']], 
-            hide_index=True, 
-            use_container_width=True,
-            selection_mode="single-row", 
-            on_select="rerun",
-            column_config={
-                "Auslastung": st.column_config.ProgressColumn(
-                    "Auslastung",
-                    format="%.1f%%",
-                    min_value=0,
-                    max_value=100,
-                )
-            }
+            hide_index=True, use_container_width=True, selection_mode="single-row", on_select="rerun",
+            column_config={"Auslastung": st.column_config.ProgressColumn("Auslastung", format="%.1f%%", min_value=0, max_value=100)}
         )
 
-        # Lösch-Button für Betrieb
         if selection.selection.rows:
-            selected_index = selection.selection.rows[0]
-            betrieb_to_delete = df_overview.iloc[selected_index]['betrieb_id']
-            if st.button(f"Betrieb {betrieb_to_delete} löschen"):
+            selected_idx = selection.selection.rows[0]
+            b_del = df_overview.iloc[selected_idx]['betrieb_id']
+            if st.button(f"Betrieb {b_del} löschen"):
                 conn = sqlite3.connect(DB_PATH)
-                conn.execute("DELETE FROM betriebe WHERE betrieb_id = ?", (betrieb_to_delete,))
-                conn.execute("DELETE FROM einsaetze WHERE betrieb_id = ?", (betrieb_to_delete,))
+                conn.execute("DELETE FROM betriebe WHERE betrieb_id = ?", (b_del,))
+                conn.execute("DELETE FROM einsaetze WHERE betrieb_id = ?", (b_del,))
+                conn.commit()
+                conn.close()
+                save_db()
+                st.rerun()
+
+            st.divider()
+            st.subheader(f"Buchungshistorie: {b_del}")
+            df_filt = df_einsaetze[df_einsaetze['betrieb_id'] == b_del].copy()
+            df_filt['Löschen'] = False
+            edit = st.data_editor(df_filt[['datum', 'ist_stunden', 'Löschen', 'id']], 
+                                  column_config={"ist_stunden": st.column_config.NumberColumn(format="%.1f"), "id": None},
+                                  hide_index=True, key="hist_ed")
+            
+            if st.button("Speichern & Löschen"):
+                conn = sqlite3.connect(DB_PATH)
+                for _, row in edit.iterrows():
+                    conn.execute("UPDATE einsaetze SET ist_stunden = ? WHERE id = ?", (row['ist_stunden'], row['id']))
+                    if row['Löschen']: conn.execute("DELETE FROM einsaetze WHERE id = ?", (row['id'],))
                 conn.commit()
                 conn.close()
                 save_db()
                 st.rerun()
     else:
-        st.warning("Lege zuerst einen Betrieb in Tab 1 an.")
-
-    st.divider()
-    # Hier folgt dann direkt der Code für # 2. Übersicht...
-
-    st.divider()
-
-  # 2. Übersicht (Aggregiert & Interaktiv)
-st.subheader("Aktuelle Auslastung")
-conn = sqlite3.connect(DB_PATH)
-df_betriebe = pd.read_sql_query("SELECT * FROM betriebe", conn)
-df_einsaetze = pd.read_sql_query("SELECT * FROM einsaetze", conn)
-conn.close()
-
-if not df_betriebe.empty:
-    df_betriebe['betrieb_id'] = df_betriebe['betrieb_id'].astype(str)
-    df_betriebe = df_betriebe.drop_duplicates(subset=['betrieb_id'])
-
-    if not df_einsaetze.empty:
-        df_einsaetze['betrieb_id'] = df_einsaetze['betrieb_id'].astype(str)
-        ist_sum = df_einsaetze.groupby('betrieb_id')['ist_stunden'].sum().reset_index()
-        df_overview = pd.merge(df_betriebe, ist_sum, on='betrieb_id', how='left')
-        df_overview['ist_stunden'] = df_overview['ist_stunden'].fillna(0)
-    else:
-        df_overview = df_betriebe.copy()
-        df_overview['ist_stunden'] = 0.0
-
-    df_overview['Auslastung'] = (df_overview['ist_stunden'] / df_overview['soll_stunden'].replace(0, 1)) * 100
-    df_overview['diff_val'] = df_overview['soll_stunden'] - df_overview['ist_stunden']
-    df_overview['Saldo'] = df_overview['diff_val'].apply(lambda x: f"{x:.1f} offen" if x > 0 else f"{abs(x):.1f} über Plan")
-    df_overview['Status'] = df_overview['Auslastung'].apply(lambda x: "✅ OK" if x >= 100 else "⏳ offen")
-    df_overview = df_overview.round(1)
-
-    selection = st.dataframe(
-        df_overview[['betrieb_id', 'soll_stunden', 'ist_stunden', 'Auslastung', 'Saldo', 'Status']], 
-        hide_index=True, 
-        use_container_width=True,
-        selection_mode="single-row", 
-        on_select="rerun",
-        column_config={"Auslastung": st.column_config.ProgressColumn("Auslastung", format="%.1f%%", min_value=0, max_value=100)}
-    )
-
-    if selection.selection.rows:
-        selected_index = selection.selection.rows[0]
-        betrieb_to_delete = df_overview.iloc[selected_index]['betrieb_id']
-        if st.button(f"Betrieb {betrieb_to_delete} löschen"):
-            conn = sqlite3.connect(DB_PATH)
-            conn.execute("DELETE FROM betriebe WHERE betrieb_id = ?", (betrieb_to_delete,))
-            conn.execute("DELETE FROM einsaetze WHERE betrieb_id = ?", (betrieb_to_delete,))
-            conn.commit()
-            conn.close()
-            save_db()
-            st.rerun()
-
-    # 3. Historie
-    st.divider()
-    if selection.selection.rows:
-        selected_index = selection.selection.rows[0]
-        selected_betrieb = df_overview.iloc[selected_index]['betrieb_id']
-        st.subheader(f"Buchungshistorie: {selected_betrieb}")
-        df_filtered = df_einsaetze[df_einsaetze['betrieb_id'] == selected_betrieb].copy()
-        df_filtered['Löschen'] = False
-        
-        edited_history = st.data_editor(
-            df_filtered[['datum', 'ist_stunden', 'Löschen', 'id']], 
-            column_config={"ist_stunden": st.column_config.NumberColumn(format="%.1f"), "id": None},
-            hide_index=True, key="history_editor"
-        )
-        
-        if st.button("Änderungen speichern & Löschen ausführen"):
-            conn = sqlite3.connect(DB_PATH)
-            for _, row in edited_history.iterrows():
-                conn.execute("UPDATE einsaetze SET ist_stunden = ? WHERE id = ?", (row['ist_stunden'], row['id']))
-            to_delete = edited_history[edited_history['Löschen'] == True]
-            for _, row in to_delete.iterrows():
-                conn.execute("DELETE FROM einsaetze WHERE id = ?", (row['id'],))
-            conn.commit()
-            conn.close()
-            save_db()
-            st.rerun()
-    else:
-        st.info("Klicke auf eine Zeile in der Tabelle oben, um die Buchungshistorie zu sehen.")
-else:
-    st.info("Keine Betriebe angelegt.")
+        st.info("Keine Betriebe angelegt.")
