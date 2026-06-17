@@ -46,6 +46,10 @@ with tab2:
     df_einsaetze = pd.read_sql_query("SELECT * FROM einsaetze", conn)
     conn.close()
 
+    # Datentypen für ID-Spalten erzwingen
+    df_betriebe['betrieb_id'] = df_betriebe['betrieb_id'].astype(str)
+    df_einsaetze['betrieb_id'] = df_einsaetze['betrieb_id'].astype(str)
+
     st.subheader("Stunden erfassen")
     if not df_betriebe.empty:
         b_select = st.selectbox("Betrieb auswählen", df_betriebe['betrieb_id'])
@@ -63,11 +67,8 @@ with tab2:
     st.subheader("Aktuelle Auslastung")
 
     if not df_betriebe.empty:
-        df_betriebe['betrieb_id'] = df_betriebe['betrieb_id'].astype(str)
-        
         if not df_einsaetze.empty:
             ist_sum = df_einsaetze.groupby('betrieb_id')['ist_stunden'].sum().reset_index()
-            # Hier: sicherstellen, dass auch ist_sum betrieb_id als String hat
             ist_sum['betrieb_id'] = ist_sum['betrieb_id'].astype(str)
             df_overview = pd.merge(df_betriebe, ist_sum, on='betrieb_id', how='left').fillna(0)
         else:
@@ -87,7 +88,7 @@ with tab2:
 
         if selection.selection.rows:
             selected_idx = selection.selection.rows[0]
-            b_del = df_overview.iloc[selected_idx]['betrieb_id']
+            b_del = str(df_overview.iloc[selected_idx]['betrieb_id'])
             if st.button(f"Betrieb {b_del} löschen"):
                 conn = sqlite3.connect(DB_PATH)
                 conn.execute("DELETE FROM betriebe WHERE betrieb_id = ?", (b_del,))
