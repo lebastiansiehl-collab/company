@@ -150,7 +150,7 @@ with tab2:
                 conn.commit()
                 conn.close()
                 save_db()
-                st.rerun(
+                st.rerun()
         else:
             st.info("Klicke auf eine Zeile in der Tabelle oben, um die Buchungshistorie zu sehen.")
             
