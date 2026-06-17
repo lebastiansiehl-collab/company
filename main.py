@@ -41,7 +41,6 @@ with tab1:
         st.success(f"Betrieb {b_id} gespeichert.")
 
 with tab2:
-    # IMMER ZUERST: Daten laden
     conn = sqlite3.connect(DB_PATH)
     df_betriebe = pd.read_sql_query("SELECT * FROM betriebe", conn)
     df_einsaetze = pd.read_sql_query("SELECT * FROM einsaetze", conn)
