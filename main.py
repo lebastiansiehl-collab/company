@@ -99,6 +99,7 @@ with tab2:
         df_overview = df_overview.round(1)
         df_overview['Status'] = df_overview['Auslastung'].apply(lambda x: "✅ OK" if x >= 100 else "⏳ offen")
 
+# Zeile 102: Tabelle mit Auswahl
         selection = st.dataframe(
             df_overview, 
             hide_index=True, 
@@ -114,6 +115,21 @@ with tab2:
                 )
             }
         )
+
+        # Lösch-Logik für den Betrieb
+        if selection.selection.rows:
+            selected_index = selection.selection.rows[0]
+            betrieb_to_delete = df_overview.iloc[selected_index]['betrieb_id']
+            
+            if st.button(f"Betrieb {betrieb_to_delete} löschen"):
+                conn = sqlite3.connect(DB_PATH)
+                # Löscht den Betrieb und alle zugehörigen Einsätze
+                conn.execute("DELETE FROM betriebe WHERE betrieb_id = ?", (betrieb_to_delete,))
+                conn.execute("DELETE FROM einsaetze WHERE betrieb_id = ?", (betrieb_to_delete,))
+                conn.commit()
+                conn.close()
+                save_db()
+                st.rerun()
 
 # 3. Historie
     st.divider()
