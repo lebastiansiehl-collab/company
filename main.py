@@ -43,11 +43,11 @@ with tab1:
 with tab2:
     st.subheader("Stunden erfassen")
     conn = sqlite3.connect(DB_PATH)
-    betriebe = pd.read_sql_query("SELECT betrieb_id FROM betriebe", conn)
+    betriebe_list = pd.read_sql_query("SELECT betrieb_id FROM betriebe", conn)
     conn.close()
     
-    if not betriebe.empty:
-        b_select = st.selectbox("Betrieb auswählen", betriebe['betrieb_id'])
+    if not betriebe_list.empty:
+        b_select = st.selectbox("Betrieb auswählen", betriebe_list['betrieb_id'])
         h_input = st.number_input("Stunden", min_value=0.0, step=0.5)
         d_input = st.date_input("Datum", date.today())
         if st.button("Buchen"):
@@ -60,6 +60,7 @@ with tab2:
 
     st.divider()
     st.subheader("Aktuelle Auslastung")
+    
     conn = sqlite3.connect(DB_PATH)
     df_betriebe = pd.read_sql_query("SELECT * FROM betriebe", conn)
     df_einsaetze = pd.read_sql_query("SELECT * FROM einsaetze", conn)
